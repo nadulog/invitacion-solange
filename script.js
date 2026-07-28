@@ -3,43 +3,54 @@ const whatsappNumber = "5491100000000";
 const invitationAudio = document.querySelector("#invitationAudio");
 const audioToggle = document.querySelector("#audioToggle");
 let audioIsPlaying = false;
+let audioWasPausedByUser = false;
 
-audioToggle.addEventListener("click", async () => {
-  try {
-    if (audioIsPlaying) {
-      invitationAudio.pause();
-      audioToggle.setAttribute("aria-label", "Reproducir música");
-      audioToggle.setAttribute("aria-pressed", "false");
-      audioToggle.classList.remove("is-playing");
-      audioIsPlaying = false;
-      return;
-    }
-
-    await invitationAudio.play();
-    audioToggle.setAttribute("aria-label", "Pausar música");
-    audioToggle.setAttribute("aria-pressed", "true");
-    audioToggle.classList.add("is-playing");
-    audioIsPlaying = true;
-  } catch (error) {
-    audioToggle.setAttribute("aria-label", "No se pudo reproducir la música");
-  }
-});
-
-invitationAudio.addEventListener("ended", () => {
-  audioToggle.setAttribute("aria-label", "Reproducir música");
-  audioToggle.setAttribute("aria-pressed", "false");
-  audioToggle.classList.remove("is-playing");
-  audioIsPlaying = false;
-});
-
-function syncAudioToggleVisibility() {
-  const scrollLimit = (document.documentElement.scrollHeight - window.innerHeight) / 2;
-  audioToggle.classList.toggle("is-hidden", window.scrollY > scrollLimit);
+function syncAudioToggle() {
+  audioIsPlaying = !invitationAudio.paused;
+  audioToggle.setAttribute("aria-label", audioIsPlaying ? "Pausar música" : "Reproducir música");
+  audioToggle.setAttribute("aria-pressed", String(audioIsPlaying));
+  audioToggle.classList.toggle("is-playing", audioIsPlaying);
 }
 
-window.addEventListener("scroll", syncAudioToggleVisibility, { passive: true });
-window.addEventListener("resize", syncAudioToggleVisibility);
-syncAudioToggleVisibility();
+async function startInvitationMusic() {
+  if (audioWasPausedByUser || !invitationAudio.paused) return;
+
+  try {
+    await invitationAudio.play();
+  } catch (error) {
+    // El navegador puede exigir una primera interacción antes de reproducir audio.
+  } finally {
+    syncAudioToggle();
+  }
+}
+
+audioToggle.addEventListener("click", async () => {
+  if (!invitationAudio.paused) {
+    audioWasPausedByUser = true;
+    invitationAudio.pause();
+    syncAudioToggle();
+    return;
+  }
+
+  audioWasPausedByUser = false;
+  await startInvitationMusic();
+});
+
+invitationAudio.addEventListener("play", syncAudioToggle);
+invitationAudio.addEventListener("pause", syncAudioToggle);
+
+startInvitationMusic();
+
+function startMusicAfterFirstInteraction(event) {
+  if (audioToggle.contains(event.target)) return;
+  startInvitationMusic();
+}
+
+["pointerdown", "keydown", "touchstart"].forEach((eventName) => {
+  window.addEventListener(eventName, startMusicAfterFirstInteraction, { once: true, passive: true });
+});
+
+syncAudioToggle();
 
 const countdownFields = {
   days: document.querySelector("#days"),
